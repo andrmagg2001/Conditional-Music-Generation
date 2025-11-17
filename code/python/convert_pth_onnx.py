@@ -100,7 +100,7 @@ class ResMelNet(nn.Module):
         return self.head(x)
 
 
-ckpt_path = Path("data/checkpoints/genre_recognition.pth")
+ckpt_path = Path("data/checkpoints/guitar_macro_classifier.pth")
 
 ckpt = torch.load(ckpt_path, map_location="cpu")
 state = ckpt["model"]

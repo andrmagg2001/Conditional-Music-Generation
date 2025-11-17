@@ -6,11 +6,10 @@
 
 The current stage focuses on **dataset preparation** for the genre classification module.
 
-- The **GTZAN Genre Collection** dataset was downloaded from Kaggle:  
-  [GTZAN Dataset](https://www.kaggle.com/datasets/carlthome/gtzan-genre-collection) with over 1000 samples audio with different genre.
+- The dataset is entirely built from **Apple Loops** included in **Logic Pro**, covering a wide variety of guitar-centric and production genres (funk, disco, trap, pop, R&B, house, world, etc.).
 
-- Each `.au` audio file from the dataset has been processed to generate a corresponding  
-  **high-resolution Mel-spectrogram** stored as a `.npy` file (same filename and folder structure).
+- Each `.wav` loop has been processed to generate a corresponding  
+  **high‑resolution Mel‑spectrogram** stored as a `.npy` file, preserving folder structure.
 
 - All Mel-spectrograms are computed with **torchaudio** using GPU/MPS acceleration  
   for faster STFT computation, and cached in the directory `classifier_mel/`.
