@@ -47,7 +47,7 @@ Two Jupyter notebooks document the entire dataset creation process:
   - Loop name stem
   - Global preprocessing parameters
 
-For further information click [here](code/jupyter/dataset_creation.ipynb)
+For further information click [here](code/Jupyter/dataset_creation.ipynb)
 
 ---
 
@@ -77,7 +77,7 @@ A checkpoint is saved in:
 ```
 data/checkpoints/guitar_macro_classifier.pth
 ```
-For further information click [here](code/jupyter/music_classificator.ipynb)
+For further information click [here](code/Jupyter/music_classificator.ipynb)
 
 ---
 
