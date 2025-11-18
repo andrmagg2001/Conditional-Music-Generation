@@ -2,6 +2,7 @@ import os
 import random
 import torch
 import json
+import torchaudio
 import torch._dynamo
 import numpy as np
 import torch.nn as nn
@@ -12,6 +13,7 @@ from tqdm import tqdm
 from torch.utils.data import Dataset, DataLoader
 from sklearn.model_selection import StratifiedShuffleSplit
 from contextlib import nullcontext
+from pathlib import Path
 
 
 SEED = 1337
@@ -44,10 +46,10 @@ if DEVICE_TYPE == "cuda":
     torch.backends.cudnn.benchmark = True
     torch.backends.cudnn.deterministic = False
 
-CACHE_ROOT  = "../../data/dataset/guitar_mel"
+CACHE_ROOT  = "data/dataset/guitar_mel"
 """**CACHE_ROOT** is the filesystem directory where all precomputed mel-spectrogram. `.npy` files and `index.json` are stored."""
 
-CHECKPOINTS = "../../data/checkpoints"
+CHECKPOINTS = "data/checkpoints"
 """**CHECKPOINTS** is the directory where trained model `.pth` are saved."""
 
 
@@ -117,6 +119,25 @@ NUM_WORKERS = 0
 PIN_MEMORY  = False
 """**PIN_MEMORY** wheter DataLoader should use pinned memory for faster GPU transfers."""
 
+SR = int(P.get("sr", 44100))
+"""**SR**: Audio sampling rate (Hz) used for mel-spectrogram computation."""
+
+N_FFT = int(P.get("n_fft", 4096))
+"""**N_FFT**: Size of the FFT window used for STFT / mel-spectrogram generation."""
+
+HOP = int(P.get("hop", 256))
+"""**HOP**: Hop length (in samples) between consecutive STFT frames."""
+
+N_MELS = int(P.get("n_mels", 256))
+"""**N_MELS**: Number of mel frequency bins in the mel-spectrogram."""
+
+FMIN = float(P.get("fmin", 20.0))
+"""**FMIN**: Minimum frequency (Hz) for the mel filterbank."""
+
+FMAX = float(P.get("fmax", SR // 2))
+"""**FMAX**: Maximum frequency (Hz) for the mel filterbank (typically Nyquist)."""
+
+
 
 if DEVICE_TYPE == "cuda":
     T_SEC   = 20.0
@@ -145,7 +166,7 @@ elif DEVICE_TYPE == "mps":
 CROP_F = int(FPS * T_SEC)
 """**CROP_F** is the number of time frames to extract from each mel-spectrogram crop based on the target duration."""
 
-def _norm_db(x: float) -> float:
+def norm_db(x: float) -> float:
     """
     Normalize a dB-scaled spectrogram value to the [0,1] range.
 
@@ -215,7 +236,7 @@ class MelDataset(Dataset):
         """
         it = self.items[i]
         X = np.load(it["mel_path"]).astype(np.float32)
-        X = _norm_db(X)
+        X = norm_db(X)
         M, T = X.shape
 
         if self.train:
@@ -248,6 +269,72 @@ class MelDataset(Dataset):
         y = it["class_idx"]
         return X, y
     
+def build_mel_frontend(device: torch.device | str = DEVICE):
+    """
+    Build MelSpectrogram + AmplitudeToDB transforms on the given device,
+    using the same parameters stored in the dataset index.
+    """
+    mel_tf = torchaudio.transforms.MelSpectrogram(
+        sample_rate=SR,
+        n_fft=N_FFT,
+        hop_length=HOP,
+        win_length=N_FFT,
+        f_min=FMIN,
+        f_max=FMAX,
+        n_mels=N_MELS,
+        window_fn=torch.hann_window,
+        power=2.0,
+        center=False,
+        norm=None,
+        mel_scale="htk",
+    ).to(device)
+
+    db_tf = torchaudio.transforms.AmplitudeToDB(
+        stype="power",
+        top_db=abs(DB_LO),
+    ).to(device)
+
+    return mel_tf, db_tf
+
+def load_mono_resampled(path: str | Path, sr: int = SR) -> torch.Tensor:
+    """
+    Load an audio file, convert to mono and resample to `sr`.
+    """
+    wav, src_sr = torchaudio.load(str(path))
+    if wav.size(0) > 1:
+        wav = wav.mean(dim=0, keepdim=True)
+    if src_sr != sr:
+        wav = torchaudio.functional.resample(wav, src_sr, sr)
+    wav = wav / max(1e-8, wav.abs().max())
+    return wav.contiguous()
+
+
+def conv_bn(
+    in_c: int,
+    out_c: int,
+    k: int = 3,
+    s: int = 1,
+    p: int = 1
+) -> nn.Sequential:
+    """
+    Build a Conv2d → BatchNorm2d → SiLU block.
+
+    Parameters:
+        in_c (int): Number of input channels.
+        out_c (int): Number of output channels.
+        k (int): Convolution kernel size.
+        s (int): Convolution stride.
+        p (int): Convolution padding.
+
+    Returns:
+        nn.Sequential: A sequential module with:
+            Conv2d(in_c → out_c) → BatchNorm2d(out_c) → SiLU activation.
+    """
+    return nn.Sequential(
+        nn.Conv2d(in_c, out_c, k, s, p, bias=False),
+        nn.BatchNorm2d(out_c),
+        nn.SiLU(inplace=True),
+    )
 
 class SEBlock(nn.Module):
     """
@@ -284,35 +371,6 @@ class SEBlock(nn.Module):
         """
         w = self.fc(x)
         return x * w
-
-
-def conv_bn(
-    in_c: int,
-    out_c: int,
-    k: int = 3,
-    s: int = 1,
-    p: int = 1
-) -> nn.Sequential:
-    """
-    Build a Conv2d → BatchNorm2d → SiLU block.
-
-    Parameters:
-        in_c (int): Number of input channels.
-        out_c (int): Number of output channels.
-        k (int): Convolution kernel size.
-        s (int): Convolution stride.
-        p (int): Convolution padding.
-
-    Returns:
-        nn.Sequential: A sequential module with:
-            Conv2d(in_c → out_c) → BatchNorm2d(out_c) → SiLU activation.
-    """
-    return nn.Sequential(
-        nn.Conv2d(in_c, out_c, k, s, p, bias=False),
-        nn.BatchNorm2d(out_c),
-        nn.SiLU(inplace=True),
-    )
-
 
 class ResBlock(nn.Module):
     """
