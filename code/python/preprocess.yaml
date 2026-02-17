@@ -1,0 +1,70 @@
+# preprocess.yaml
+version: 1
+
+paths:
+  manifest_path:      "data/json/manifest.jsonl"    
+  input_midi_root:    "data/dataset/midi"
+  output_json_dir:    "data/json/processed_v1"     
+  report_dir:         "data/json/processed_v1/reports"
+
+dataset:
+  seed: 1337
+  split: { train: 0.8, val: 0.1, test: 0.1 }
+
+input:
+  mode:         "manifest"
+  fields:
+    song_id:    "song_id"
+    midi_path:  "midi_path"
+    bpm:        "bpm"
+    drum_idx:   "drum_idx"
+    bass_idx:   "bass_idx"
+    harm_idx:   "harm_idx"
+
+normalize:
+  target_tpb:   480
+
+tempo:
+  source:       "manifest"
+  default_bpm_if_missing: 120
+  flatten_tempo_changes: true
+
+time_signature:
+  allowed: [[4,4]]
+  assume_if_missing: true
+  discard_if_not_allowed: true
+
+quantization:
+  grid:         "1/16"
+  steps_per_beat: 4
+  round_mode:   "nearest"
+  min_note_steps: 1
+  max_note_bars: 8
+  drop_overlaps_same_pitch: true
+
+role_mapping:
+  mode:         "track_indices"
+  roles:
+    drums:      "drum_idx"
+    bass:       "bass_idx"
+    harmony:    "harm_idx"
+
+filters_post:
+  discard_if_total_notes_lt: 32
+  max_total_notes: 20000
+
+export:
+  format:           "jsonl"
+  write_splits: true
+  split_filenames: { train: "train.jsonl", val: "val.jsonl", test: "test.jsonl" }
+  row_schema:       "roles_notes_v1"
+  note_format:      "tick_tick_pitch_vel"
+  include_source_path: true
+  include_stats: true
+  include_meta: true
+
+logging:
+  level:            "INFO"
+  error_log_path:   "data/json/processed_v1/reports/errors.jsonl"
+  discard_log_path: "data/json/processed_v1/reports/discarded.jsonl"
+  summary_path:     "data/json/processed_v1/reports/summary.json"
