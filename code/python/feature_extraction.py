@@ -9,6 +9,7 @@ _model: ResMelNet | None = None
 
 def build_chord_templates():
     """
+    # Build chord templates
     Build normalized chroma templates for all 12 major and 12 minor triads.
 
     This function creates simple binary chroma templates for:
@@ -60,6 +61,7 @@ CHORD_TEMPLATES, CHORD_NAMES = build_chord_templates()
 
 def estimate_chords(y, sr=48000, hop_length=512):
     """
+    # Estimate chords
     Estimate a beat-synchronous chord sequence from an audio track.
 
     This function:
@@ -143,6 +145,7 @@ def estimate_chords(y, sr=48000, hop_length=512):
 
 def classify_audio_file(path: str | Path) -> str:
     """
+    # Classify audio file
     Classify a single audio file into one of the macro-genre classes.
 
     This function:

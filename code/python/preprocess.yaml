@@ -4,8 +4,8 @@ version: 1
 paths:
   manifest_path:      "data/json/manifest.jsonl"    
   input_midi_root:    "data/dataset/midi"
-  output_json_dir:    "data/json/processed_v1"     
-  report_dir:         "data/json/processed_v1/reports"
+  output_json_dir:    "data/json/processed"     
+  report_dir:         "data/json/processed/reports"
 
 dataset:
   seed: 1337
@@ -68,3 +68,6 @@ logging:
   error_log_path:   "data/json/processed_v1/reports/errors.jsonl"
   discard_log_path: "data/json/processed_v1/reports/discarded.jsonl"
   summary_path:     "data/json/processed_v1/reports/summary.json"
+
+loop:
+  steps: 128

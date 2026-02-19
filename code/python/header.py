@@ -162,6 +162,7 @@ CROP_F = int(FPS * T_SEC)
 
 def norm_db(x: float) -> float:
     """
+    # Normalize db
     Normalize a dB-scaled spectrogram value to the [0,1] range.
 
     Parameters:
@@ -265,6 +266,7 @@ class MelDataset(Dataset):
     
 def build_mel_frontend(device: torch.device | str = DEVICE):
     """
+    # Build mel frontend
     Build MelSpectrogram + AmplitudeToDB transforms on the given device,
     using the same parameters stored in the dataset index.
     """
@@ -292,6 +294,7 @@ def build_mel_frontend(device: torch.device | str = DEVICE):
 
 def load_mono_resampled(path: str | Path, sr: int = SR) -> torch.Tensor:
     """
+    # Load mono resampled
     Load an audio file, convert to mono and resample to `sr`.
     """
     wav, src_sr = torchaudio.load(str(path))
@@ -311,6 +314,7 @@ def conv_bn(
     p: int = 1
 ) -> nn.Sequential:
     """
+    # ConvBN
     Build a Conv2d → BatchNorm2d → SiLU block.
 
     Parameters:
@@ -332,6 +336,7 @@ def conv_bn(
 
 class SEBlock(nn.Module):
     """
+    # SEBlock
     Squeeze-and-Excitation (SE) block for channel-wise attention on 2D feature maps.
     """
 
@@ -368,6 +373,7 @@ class SEBlock(nn.Module):
 
 class ResBlock(nn.Module):
     """
+    # ResBlock
     Residual convolutional block with optional downsampling and Squeeze-and-Excitation.
 
     Parameters:
