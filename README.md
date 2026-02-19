@@ -147,3 +147,181 @@ This:
 **Department:** Computer Vision Laboratory  
 **Institution:** Sapienza University of Rome  
 **Academic Year:** 2025/26
+# Conditional Music Generation from Guitar Performances
+
+This repository is building an end‑to‑end pipeline that turns an **input guitar performance** into **conditioning signals** (genre, BPM, chords, etc.) and ultimately enables a **generative model** to produce coherent multi‑instrument accompaniments.
+
+At the moment, the project contains:
+- A complete **audio analysis + genre classification** pipeline (mel frontend + ResNet‑style model).
+- A robust **MIDI preprocessing pipeline** to create **instruction‑tuning style JSONL** examples for loop generation, including variable loop length control.
+
+---
+
+## 1. Project Goal
+
+Given a guitar audio track, the system aims to:
+1. **Analyze** the audio and estimate musical attributes (macro‑genre, BPM, chord progression).
+2. Produce a structured representation that can be used as **conditioning** for generation.
+3. Train / fine‑tune a generative model that can **generate a loop** (drums, bass, harmony) consistent with the conditioning.
+
+---
+
+## 2. Audio Dataset & Preprocessing (Apple Loops)
+
+The audio dataset is built from **Apple Loops (Logic Pro)**, manually organized into subfolders representing musical styles.
+
+Two notebooks document dataset creation and training:
+- `code/jupyter/dataset_creation.ipynb` — mel caching, augmentation, indexing, visualization
+- `code/jupyter/music_classificator.ipynb` — training, metrics, evaluation
+
+### Mel‑spectrogram frontend
+- FFT size: **4096**
+- Hop length: **256**
+- Mel bins: **256**
+- Frequency range: **20 Hz – Nyquist**
+- Amplitude → dB
+- Normalization to **[0, 1]**
+- Augmentation: random time/frequency masking
+
+The preprocessing also produces a JSON index with:
+- File path
+- Mel shape
+- Class index
+- Loop name stem
+- Global preprocessing parameters
+
+---
+
+## 3. Genre Classifier: ResMelNet
+
+The classifier takes a fixed‑size mel patch and outputs a **macro‑genre** label.
+
+### Training setup
+- Optimizer: **AdamW**
+- Loss: **Label‑Smoothed Cross Entropy**
+- Scheduler: **Cosine Annealing Warm Restarts**
+- Gradient accumulation
+- Early stopping on validation accuracy
+- Automatic device selection (**CUDA / MPS / CPU**)
+
+A checkpoint is saved to:
+
+```text
+data/checkpoints/guitar_macro_classifier.pth
+```
+
+---
+
+## 4. Feature Extraction (Audio → Conditioning)
+
+The `feature_extraction.py` module provides a unified interface to analyze a raw audio file.
+
+### Extracted information
+1. **Genre prediction**
+   - Loads the trained classifier.
+   - Builds the mel frontend on the fly.
+   - Produces softmax probabilities and a predicted genre.
+
+2. **BPM estimation**
+   - Uses `librosa.beat.beat_track`.
+   - Post‑processing to reduce octave errors (×2 / ÷2).
+
+3. **Chord recognition**
+   - CQT‑based chroma.
+   - Beat‑synchronous chroma averaging.
+   - Cosine similarity vs 24 templates (12 major + 12 minor triads).
+
+### Output
+Analysis results are saved to:
+
+```text
+data/json/meta.json
+```
+
+Example format:
+
+```json
+{
+  "BPM": 120,
+  "CHORDS": [
+    [0.0, "Am"],
+    [1.0, "F"],
+    [2.0, "C"],
+    [3.0, "G"]
+  ],
+  "GENRE": "rock"
+}
+```
+
+---
+
+## 5. MIDI → JSONL Loop Dataset (Done)
+
+To train a loop generator, we convert curated MIDI files (with drums/bass/harmony tracks) into a **JSONL** format compatible with instruction‑tuning style training.
+
+### What the preprocessing guarantees
+- **Timebase normalization**: every MIDI is rescaled to a common `ticks_per_beat` (TPB).
+- **Quantization**: events are snapped to a fixed grid (e.g., **1/16**) via `steps_per_beat`.
+- **4/4 filtering**:
+  - If the file has time signatures and any is not **4/4**, the sample is **discarded**.
+  - If the file has no time signatures, it is treated as **4/4**.
+- **Robust event encoding**:
+  - Each note becomes a token containing start/end step, pitch, velocity.
+  - Tracks are serialized role‑by‑role in a stable order.
+
+### Variable loop length control
+Each training example includes a **length token** in the user prompt:
+
+```text
+<LEN_128>
+Generate one loop. Output only tokens.
+```
+
+The target is wrapped as:
+
+```text
+<LOOP>
+... tokens ...
+</LOOP>
+```
+
+The length (`LEN_N`) is derived from:
+- `loop_steps` in the per‑song manifest entry (if present), otherwise
+- a global default from `preprocess.yaml` (if set), otherwise
+- a fallback computed from `steps_per_beat` (e.g., 4 beats).
+
+### Outputs
+The preprocessing produces:
+- `processed.jsonl` — valid training rows
+- `errors.jsonl` — exceptions with song id + path
+- `discarded.jsonl` — discarded samples with reason (e.g., not_4_4)
+- `summary.json` — totals and reason counts
+
+---
+
+## 6. Usage
+
+### Run audio analysis
+
+```bash
+python code/python/feature_extraction.py
+```
+
+This:
+- Loads the classifier (if available)
+- Computes the mel spectrogram
+- Predicts genre, estimates BPM, extracts chords
+- Saves the conditioning JSON
+
+### Run MIDI → JSONL preprocessing
+
+Run the manifest→JSONL script after setting the paths in `preprocess.yaml`.
+
+---
+
+## Author & Supervision
+
+**Author:** Andrea Maggiore  
+**Thesis Supervisor:** Prof. Marco Raoul Marini  
+**Institution:** Sapienza University of Rome  
+**Academic Year:** 2025/26
