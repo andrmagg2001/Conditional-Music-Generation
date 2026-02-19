@@ -140,13 +140,6 @@ This:
 
 ---
 
-## Author & Supervision
-
-**Author:** Andrea Maggiore  
-**Thesis Supervisor:** Prof. Marco Raoul Marini  
-**Department:** Computer Vision Laboratory  
-**Institution:** Sapienza University of Rome  
-**Academic Year:** 2025/26
 # Conditional Music Generation from Guitar Performances
 
 This repository is building an end‑to‑end pipeline that turns an **input guitar performance** into **conditioning signals** (genre, BPM, chords, etc.) and ultimately enables a **generative model** to produce coherent multi‑instrument accompaniments.
