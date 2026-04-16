@@ -27,11 +27,11 @@ class TrainConfig:
     output_dir: str = "data/checkpoints/baseline_transformer"
     seed: int = 42
     batch_size: int = 8
-    max_len: int = 256
-    d_model: int = 128
-    n_heads: int = 4
-    n_layers: int = 4
-    d_ff: int = 512
+    max_len: int = 512
+    d_model: int = 256
+    n_heads: int = 8
+    n_layers: int = 6
+    d_ff: int = 1024
     dropout: float = 0.1
     lr: float = 3e-4
     min_lr: float = 3e-5

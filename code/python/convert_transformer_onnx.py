@@ -7,8 +7,8 @@ from train_baseline import BaselineTransformerLM, load_vocab
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--ckpt", type=str, default="data/checkpoints/baseline_transformer/latest.pt")
-    parser.add_argument("--out", type=str, default="data/checkpoints/baseline_transformer/latest.onnx")
+    parser.add_argument("--ckpt", type=str, default="data/checkpoints/conditioned_transformer/best.pth")
+    parser.add_argument("--out", type=str, default="data/checkpoints/conditioned_transformer/best.onnx")
     parser.add_argument("--opset", type=int, default=17)
     parser.add_argument("--seq-len", type=int, default=128)
     args = parser.parse_args()

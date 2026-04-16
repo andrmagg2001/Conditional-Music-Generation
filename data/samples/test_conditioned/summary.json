@@ -1,0 +1,28 @@
+{
+  "audio": "Test.wav",
+  "style_label": "funk_disco",
+  "meta_genre": "funk_disco",
+  "meta_bpm": 125.0,
+  "meta_chords_count": 8,
+  "prompt": [
+    "<GENRE_funk_disco>",
+    "<BPM_120>",
+    "<LEN_128>",
+    "Generate",
+    "one",
+    "loop.",
+    "Output",
+    "only",
+    "tokens.",
+    "<LOOP>"
+  ],
+  "warnings": [
+    "conditioning: genre=funk_disco, bpm_bucket=120",
+    "meta_chords_count=8"
+  ],
+  "valid_count": 5,
+  "num_candidates": 5,
+  "min_notes": 16,
+  "best_sample": 1,
+  "device": "mps"
+}

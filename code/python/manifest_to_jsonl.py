@@ -8,6 +8,7 @@ import json as js
 INSTRUCTION     = "Generate one loop. Output only tokens."
 YAML_PATH       = "code/python/preprocess.yaml"
 JSON_MANIFEST   = ""
+ENRICHED_MANIFEST = "data/json/manifest_enriched.jsonl"
 JSON_OUTPUT_DIR = ""
 JSON_LOG_DIR    = ""
 QUANT_GRID      = ""
@@ -32,7 +33,13 @@ def safe_int(x, default=None):
 with open(YAML_PATH, "r", encoding="utf-8") as stream:
     temp = yaml.safe_load(stream)
 
-JSON_MANIFEST   = temp["paths"]["manifest_path"]
+# Use enriched manifest if it exists, otherwise fall back to base manifest
+if os.path.isfile(ENRICHED_MANIFEST):
+    JSON_MANIFEST = ENRICHED_MANIFEST
+    print(f"[INFO] Using enriched manifest: {ENRICHED_MANIFEST}")
+else:
+    JSON_MANIFEST = temp["paths"]["manifest_path"]
+    print(f"[WARN] Enriched manifest not found, using base: {JSON_MANIFEST}")
 JSON_OUTPUT_DIR = temp["paths"]["output_json_dir"]
 JSON_LOG_DIR    = temp["paths"]["report_dir"]
 
@@ -75,18 +82,36 @@ summary = {
     "reasons": {}
 }
 
-def event_to_token(role: str, ev: dict) -> str:
-    r = role[0].upper()
-    return f"{r}:s={ev['start_step']},e={ev['end_step']},p={ev['pitch']},v={ev['velocity']}"
+def quantize_velocity(v: int, step: int = 8) -> int:
+    """Quantize velocity to nearest multiple of `step`, clamped to [1, 127]."""
+    v = max(1, min(127, int(v)))
+    q = int(round(v / step) * step)
+    return max(1, min(127, q))
+
+
+def event_to_subtokens(role: str, ev: dict) -> list[str]:
+    """
+    Convert a single MIDI event into 5 sub-tokens:
+        <R_D> <S_0> <E_1> <P_42> <V_112>
+
+    This reduces vocabulary from ~419K combinatorial tokens to ~450 atomic tokens.
+    """
+    r = role[0].upper()  # D, B, H
+    s = int(ev["start_step"])
+    e = int(ev["end_step"])
+    p = int(ev["pitch"])
+    v = quantize_velocity(int(ev["velocity"]))
+    return [f"<R_{r}>", f"<S_{s}>", f"<E_{e}>", f"<P_{p}>", f"<V_{v}>"]
 
 
 def roles_to_tokens(roles: dict) -> str:
+    """Serialize all roles into a flat string of sub-tokens."""
     tokens = []
     for role_name in ["drums", "bass", "harmony"]:
         evs = roles.get(role_name, [])
         evs = sorted(evs, key=lambda x: (x["start_step"], x["end_step"], x["pitch"], x["velocity"]))
         for ev in evs:
-            tokens.append(event_to_token(role_name, ev))
+            tokens.extend(event_to_subtokens(role_name, ev))
     return " ".join(tokens)
 
 
@@ -319,7 +344,21 @@ with open(processed_jsonl_path, "a", encoding="utf-8", newline="\n") as f_ok, \
                 }, ensure_ascii=False) + "\n")
                 continue
 
-            user_prompt = f"<LEN_{int(loop_steps)}>\n{INSTRUCTION}"
+            # ── Build conditioned prompt ──────────────────
+            genre     = line.get("genre", "unknown")
+            bpm_bucket = line.get("bpm_bucket")
+            if bpm_bucket is None:
+                # fallback: bucket the raw bpm
+                raw_bpm = float(line.get("bpm", 120))
+                if raw_bpm > 200:
+                    raw_bpm /= 2.0
+                raw_bpm = max(60.0, min(200.0, raw_bpm))
+                bpm_bucket = int(round(raw_bpm / 10.0) * 10)
+
+            user_prompt = (
+                f"<GENRE_{genre}> <BPM_{int(bpm_bucket)}> <LEN_{int(loop_steps)}>\n"
+                f"{INSTRUCTION}"
+            )
 
             roles_dict = {"drums": drums_out, "bass": bass_out, "harmony": harm_out}
             assistant_tokens = roles_to_tokens(roles_dict)
@@ -333,6 +372,8 @@ with open(processed_jsonl_path, "a", encoding="utf-8", newline="\n") as f_ok, \
                 "meta": {
                     "song_id": song_id,
                     "bpm": line.get("bpm"),
+                    "bpm_bucket": bpm_bucket,
+                    "genre": genre,
                     "tpb": TARGET_TPB,
                     "grid": QUANT_GRID,
                     "step_ticks": STEP_TICKS,

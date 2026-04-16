@@ -1,0 +1,10 @@
+{"sample": 1, "valid": true, "event_count": 2000, "note_count": 400, "score": 2200.0, "midi": "data/samples/test_soft/sample_001.mid"}
+{"sample": 2, "valid": true, "event_count": 2000, "note_count": 223, "score": 2111.5, "midi": "data/samples/test_soft/sample_002.mid"}
+{"sample": 3, "valid": true, "event_count": 2000, "note_count": 400, "score": 2200.0, "midi": "data/samples/test_soft/sample_003.mid"}
+{"sample": 4, "valid": true, "event_count": 970, "note_count": 194, "score": 1067.0, "midi": "data/samples/test_soft/sample_004.mid"}
+{"sample": 5, "valid": true, "event_count": 845, "note_count": 169, "score": 929.5, "midi": "data/samples/test_soft/sample_005.mid"}
+{"sample": 6, "valid": true, "event_count": 2000, "note_count": 400, "score": 2200.0, "midi": "data/samples/test_soft/sample_006.mid"}
+{"sample": 7, "valid": true, "event_count": 2000, "note_count": 400, "score": 2200.0, "midi": "data/samples/test_soft/sample_007.mid"}
+{"sample": 8, "valid": true, "event_count": 1900, "note_count": 379, "score": 2089.5, "midi": "data/samples/test_soft/sample_008.mid"}
+{"sample": 9, "valid": true, "event_count": 920, "note_count": 184, "score": 1012.0, "midi": "data/samples/test_soft/sample_009.mid"}
+{"sample": 10, "valid": true, "event_count": 2000, "note_count": 400, "score": 2200.0, "midi": "data/samples/test_soft/sample_010.mid"}

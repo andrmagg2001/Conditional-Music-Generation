@@ -1,0 +1,5 @@
+{"sample": 1, "valid": true, "event_count": 2000, "note_count": 369, "score": 2184.5, "midi": "data/samples/test_conditioned/sample_001.mid"}
+{"sample": 2, "valid": true, "event_count": 805, "note_count": 161, "score": 885.5, "midi": "data/samples/test_conditioned/sample_002.mid"}
+{"sample": 3, "valid": true, "event_count": 950, "note_count": 190, "score": 1045.0, "midi": "data/samples/test_conditioned/sample_003.mid"}
+{"sample": 4, "valid": true, "event_count": 1640, "note_count": 328, "score": 1804.0, "midi": "data/samples/test_conditioned/sample_004.mid"}
+{"sample": 5, "valid": true, "event_count": 1286, "note_count": 257, "score": 1414.5, "midi": "data/samples/test_conditioned/sample_005.mid"}

@@ -1,320 +1,350 @@
-# Condition Music Generation from Guitar Performances using Deep Neural Networks
+# Conditional Music Generation from Guitar Performances using Deep Neural Networks
 
-This project implements a complete pipeline for **audio analysis** and **genre‑conditioned music generation**.  
-It includes dataset creation, feature extraction, deep‑learning‑based classification, and extraction of musical attributes such as BPM and chord progressions.  
-The long‑term objective is to provide the conditioning signals necessary for a generative model capable of producing musical accompaniments based on an input guitar performance.
-
----
-
-## 1. Project Purpose
-
-The goal is to build a system that:
-- Analyzes an input audio track.
-- Estimates musical attributes (genre, BPM, chord sequence).
-- Produces a structured JSON description used to control the future generator.
-- Trains a CNN-based classifier (ResMelNet) on curated audio data.
-- Extracts mel‑spectrograms and metadata for training and inference.
-
-All components are fully implemented using Python, PyTorch, torchaudio, and librosa.
+> **Thesis Project — Sapienza Università di Roma, A.Y. 2025/26**  
+> **Author:** Andrea Maggiore — Mat. 1947898  
+> **Supervisor:** Prof. Marco Raoul Marini
 
 ---
 
-## 2. Dataset and Preprocessing
+## Abstract
 
-The dataset is built from **Apple Loops (Logic Pro)**, manually organized into subfolders representing musical styles.  
-Two Jupyter notebooks document the entire dataset creation process:
+This project implements an end-to-end pipeline that takes a **raw guitar audio recording** as input and generates a coherent **multi-instrument MIDI accompaniment** (drums, bass, harmony) conditioned on the musical content of the input.
 
-- `code/jupyter/dataset_creation.ipynb`  
-  (mel‑spectrogram caching, augmentation, indexing, visualization)
+The system is composed of two cooperating subsystems:
 
-- `code/jupyter/music_classificator.ipynb`  
-  (model training, metrics, plots, and evaluation)
+1. **Audio Analysis Module** — A CNN-based classifier (`ResMelNet`) for genre prediction, combined with signal-processing routines for BPM estimation and chord recognition.
+2. **Conditional MIDI Generator** — A causal Transformer language model trained on structured MIDI data, conditioned via token prepending on genre and tempo metadata extracted from the audio.
 
-### Preprocessing steps
-- Loading and resampling audio.
-- Converting audio to mel‑spectrograms using:
-  - FFT size = 4096  
-  - Hop length = 256  
-  - 256 mel bins  
-  - Frequency range 20 Hz – Nyquist  
-- Applying amplitude‑to‑dB conversion.
-- Normalizing to the `[0,1]` range.
-- Random time/frequency masking for data augmentation.
-- JSON index creation containing:
-  - File path
-  - Mel shape
-  - Class index
-  - Loop name stem
-  - Global preprocessing parameters
-
-For further information click [here](code/Jupyter/dataset_creation.ipynb)
+The key architectural insight is that **conditioning requires no modification to the Transformer itself**: by prepending discrete conditioning tokens (`<GENRE_rock>`, `<BPM_120>`, etc.) to the training sequences, the model learns genre- and tempo-dependent generation patterns through standard causal attention.
 
 ---
 
-## 3. Model: ResMelNet Classifier
-
-The classifier receives a fixed‑size mel‑spectrogram patch and outputs a macro‑genre label.
-
-### Architecture
-- Convolutional stem.
-- Four residual stages with optional downsampling.
-- Squeeze‑and‑Excitation blocks.
-- Projection layers between stages.
-- Fully‑connected classification head.
-
-### Training
-- Optimizer: AdamW  
-- Loss: Label‑Smoothed Cross Entropy  
-- Scheduler: Cosine Annealing Warm Restarts  
-- Gradient accumulation for stability  
-- Early stopping based on validation accuracy  
-- Automatic GPU selection (CUDA / MPS / CPU)
-
-During training, mel crops are downsampled to reduce temporal and spectral resolution using average pooling.
-
-A checkpoint is saved in:
+## System Architecture
 
 ```
-data/checkpoints/guitar_macro_classifier.pth
-```
-For further information click [here](code/Jupyter/music_classificator.ipynb)
-
----
-
-## 4. Feature Extraction
-
-The `feature_extraction.py` module provides a unified interface to analyze a raw audio file.
-
-### Extracted information
-1. **Genre prediction**  
-   - Loads the trained classifier.
-   - Builds mel‑spectrogram frontend on the fly.
-   - Produces softmax probabilities and genre selection.
-
-2. **BPM estimation**  
-   - Uses `librosa.beat.beat_track`.
-   - Post‑processes the tempo to reduce octave errors (×2, ÷2).
-
-3. **Chord recognition**  
-   - Uses CQT‑based chroma.
-   - Beat‑synchronous chroma averaging.
-   - Cosine‑similarity matching against 24 chord templates  
-     (12 major + 12 minor triads).
-
-### Output format
-
-The analysis results are automatically saved to:
-
-```
-data/json/meta.json
-```
-
-With the structure:
-
-```json
-{
-  "BPM": <int>,
-  "CHORDS": [
-    [<timestamp_sec>, "<chord_label>"],
-    ...
-  ],
-  "GENRE": "<genre_name>"
-}
+                        ┌──────────────────────────────────┐
+                        │         Input: guitar.wav        │
+                        └──────────────┬───────────────────┘
+                                       │
+                        ┌──────────────▼───────────────────┐
+                        │     Audio Analysis Pipeline      │
+                        │                                  │
+                        │  ┌────────────┐  ┌────────────┐  │
+                        │  │  ResMelNet │  │  librosa   │  │
+                        │  │   Genre    │  │   BPM      │  │
+                        │  └─────┬──────┘  └─────┬──────┘  │
+                        │        │               │         │
+                        │  ┌─────▼───────────────▼──────┐  │
+                        │  │   CQT Chroma → Chords      │  │
+                        │  └─────┬──────────────────────┘  │
+                        └────────┼─────────────────────────┘
+                                 │
+                        ┌────────▼─────────────────────────┐
+                        │  Conditioning: meta.json         │
+                        │  { genre: "rock", bpm: 120, ...} │
+                        └────────┬─────────────────────────┘
+                                 │
+                        ┌────────▼─────────────────────────┐
+                        │  Prompt Construction             │
+                        │  <GENRE_rock> <BPM_120> <LEN_128>│
+                        │  Generate one loop. Output only  │
+                        │  tokens. <LOOP>                  │
+                        └────────┬─────────────────────────┘
+                                 │
+                        ┌────────▼─────────────────────────┐
+                        │  Causal Transformer LM (25.4M)   │
+                        │  d=512, 8 layers, 8 heads        │
+                        │  vocab: 427 sub-tokens           │
+                        └────────┬─────────────────────────┘
+                                 │
+                        ┌────────▼─────────────────────────┐
+                        │  Output: accompaniment.mid       │
+                        │  (drums + bass + harmony)        │
+                        └──────────────────────────────────┘
 ```
 
 ---
 
-## 5. Usage
+## Key Design Decisions
 
-### Running the analysis
+### Sub-token Decomposition
+
+A critical challenge was vocabulary size. The naive approach of encoding each MIDI event as a single token (e.g., `D:s=0,e=1,p=42,v=110`) produced **~419,000 unique tokens**, making the embedding table alone consume >400 MB and preventing the use of meaningful model architectures on consumer hardware.
+
+The solution adopted decomposes each event into **5 atomic sub-tokens**:
+
+| Component | Token Example | Range |
+|-----------|--------------|-------|
+| Role      | `<R_D>`, `<R_B>`, `<R_H>` | 3 values |
+| Start step | `<S_0>` ... `<S_127>` | 128 values |
+| End step  | `<E_1>` ... `<E_128>` | 128 values |
+| Pitch     | `<P_0>` ... `<P_127>` | 128 values |
+| Velocity  | `<V_8>` ... `<V_120>` | 16 values (quantized) |
+
+This reduces the vocabulary from **419,255 → 427 tokens**, a **~1000× reduction**. The embedding table drops from 430 MB to <1 MB, enabling a 25M-parameter Transformer to train comfortably on a MacBook Pro with 24 GB unified memory.
+
+### Conditioning via Token Prepending
+
+Instead of modifying the Transformer architecture (e.g., cross-attention, FiLM layers), conditioning is achieved by prepending structured tokens to the input sequence:
 
 ```
-python code/python/feature_extraction.py
-```
-
-This:
-- Loads the model if not already in memory.
-- Computes mel‑spectrograms.
-- Performs prediction and signal analysis.
-- Saves metadata as JSON.
-
----
-
-# Conditional Music Generation from Guitar Performances
-
-This repository is building an end‑to‑end pipeline that turns an **input guitar performance** into **conditioning signals** (genre, BPM, chords, etc.) and ultimately enables a **generative model** to produce coherent multi‑instrument accompaniments.
-
-At the moment, the project contains:
-- A complete **audio analysis + genre classification** pipeline (mel frontend + ResNet‑style model).
-- A robust **MIDI preprocessing pipeline** to create **instruction‑tuning style JSONL** examples for loop generation, including variable loop length control.
-
----
-
-## 1. Project Goal
-
-Given a guitar audio track, the system aims to:
-1. **Analyze** the audio and estimate musical attributes (macro‑genre, BPM, chord progression).
-2. Produce a structured representation that can be used as **conditioning** for generation.
-3. Train / fine‑tune a generative model that can **generate a loop** (drums, bass, harmony) consistent with the conditioning.
-
----
-
-## 2. Audio Dataset & Preprocessing (Apple Loops)
-
-The audio dataset is built from **Apple Loops (Logic Pro)**, manually organized into subfolders representing musical styles.
-
-Two notebooks document dataset creation and training:
-- `code/jupyter/dataset_creation.ipynb` — mel caching, augmentation, indexing, visualization
-- `code/jupyter/music_classificator.ipynb` — training, metrics, evaluation
-
-### Mel‑spectrogram frontend
-- FFT size: **4096**
-- Hop length: **256**
-- Mel bins: **256**
-- Frequency range: **20 Hz – Nyquist**
-- Amplitude → dB
-- Normalization to **[0, 1]**
-- Augmentation: random time/frequency masking
-
-The preprocessing also produces a JSON index with:
-- File path
-- Mel shape
-- Class index
-- Loop name stem
-- Global preprocessing parameters
-
----
-
-## 3. Genre Classifier: ResMelNet
-
-The classifier takes a fixed‑size mel patch and outputs a **macro‑genre** label.
-
-### Training setup
-- Optimizer: **AdamW**
-- Loss: **Label‑Smoothed Cross Entropy**
-- Scheduler: **Cosine Annealing Warm Restarts**
-- Gradient accumulation
-- Early stopping on validation accuracy
-- Automatic device selection (**CUDA / MPS / CPU**)
-
-A checkpoint is saved to:
-
-```text
-data/checkpoints/guitar_macro_classifier.pth
-```
-
----
-
-## 4. Feature Extraction (Audio → Conditioning)
-
-The `feature_extraction.py` module provides a unified interface to analyze a raw audio file.
-
-### Extracted information
-1. **Genre prediction**
-   - Loads the trained classifier.
-   - Builds the mel frontend on the fly.
-   - Produces softmax probabilities and a predicted genre.
-
-2. **BPM estimation**
-   - Uses `librosa.beat.beat_track`.
-   - Post‑processing to reduce octave errors (×2 / ÷2).
-
-3. **Chord recognition**
-   - CQT‑based chroma.
-   - Beat‑synchronous chroma averaging.
-   - Cosine similarity vs 24 templates (12 major + 12 minor triads).
-
-### Output
-Analysis results are saved to:
-
-```text
-data/json/meta.json
-```
-
-Example format:
-
-```json
-{
-  "BPM": 120,
-  "CHORDS": [
-    [0.0, "Am"],
-    [1.0, "F"],
-    [2.0, "C"],
-    [3.0, "G"]
-  ],
-  "GENRE": "rock"
-}
-```
-
----
-
-## 5. MIDI → JSONL Loop Dataset (Done)
-
-To train a loop generator, we convert curated MIDI files (with drums/bass/harmony tracks) into a **JSONL** format compatible with instruction‑tuning style training.
-
-### What the preprocessing guarantees
-- **Timebase normalization**: every MIDI is rescaled to a common `ticks_per_beat` (TPB).
-- **Quantization**: events are snapped to a fixed grid (e.g., **1/16**) via `steps_per_beat`.
-- **4/4 filtering**:
-  - If the file has time signatures and any is not **4/4**, the sample is **discarded**.
-  - If the file has no time signatures, it is treated as **4/4**.
-- **Robust event encoding**:
-  - Each note becomes a token containing start/end step, pitch, velocity.
-  - Tracks are serialized role‑by‑role in a stable order.
-
-### Variable loop length control
-Each training example includes a **length token** in the user prompt:
-
-```text
-<LEN_128>
-Generate one loop. Output only tokens.
-```
-
-The target is wrapped as:
-
-```text
-<LOOP>
-... tokens ...
+<GENRE_rock> <BPM_120> <LEN_128> Generate one loop. Output only tokens. <LOOP>
+<R_D> <S_0> <E_2> <P_36> <V_96> <R_D> <S_0> <E_1> <P_42> <V_112> ...
 </LOOP>
 ```
 
-The length (`LEN_N`) is derived from:
-- `loop_steps` in the per‑song manifest entry (if present), otherwise
-- a global default from `preprocess.yaml` (if set), otherwise
-- a fallback computed from `steps_per_beat` (e.g., 4 beats).
-
-### Outputs
-The preprocessing produces:
-- `processed.jsonl` — valid training rows
-- `errors.jsonl` — exceptions with song id + path
-- `discarded.jsonl` — discarded samples with reason (e.g., not_4_4)
-- `summary.json` — totals and reason counts
+The model learns genre→pattern correlations through standard causal attention — no architectural changes required. This approach is consistent with techniques used in MusicLM, MusicGen, and other state-of-the-art generative music models.
 
 ---
 
-## 6. Usage
+## Repository Structure
 
-### Run audio analysis
-
-```bash
-python code/python/feature_extraction.py
+```
+Conditional-Music-Generation/
+│
+├── code/
+│   ├── python/
+│   │   ├── header.py                   # Constants, MelDataset, ResMelNet, LSCELoss
+│   │   ├── feature_extraction.py       # Audio → genre + BPM + chords → meta.json
+│   │   ├── enrich_manifest.py          # Adds genre/BPM labels to MIDI manifest
+│   │   ├── manifest_to_jsonl.py        # MIDI → sub-token JSONL training data
+│   │   ├── split_dataset.py            # Train/val/test split by song_id
+│   │   ├── build_vocab.py              # Builds vocabulary from training split
+│   │   ├── dataset_loader.py           # PyTorch Dataset + DataLoader
+│   │   ├── train_baseline.py           # Transformer LM training loop
+│   │   ├── pipeline_generate.py        # End-to-end inference pipeline
+│   │   ├── validate_tokenizer_roundtrip.py  # Tokenizer integrity test
+│   │   ├── convert_transformer_onnx.py      # PyTorch → ONNX export
+│   │   └── preprocess.yaml             # Preprocessing configuration
+│   │
+│   └── jupyter/
+│       ├── dataset_creation.ipynb      # Audio dataset curation + visualization
+│       └── music_classificator.ipynb   # ResMelNet training + evaluation
+│
+├── data/
+│   ├── dataset/
+│   │   ├── audio/                      # 33 classes of guitar loops (Apple Loops)
+│   │   └── midi/                       # 6,843 curated MIDI files
+│   │
+│   ├── json/
+│   │   ├── manifest.jsonl              # Raw MIDI manifest (song_id, paths, BPM)
+│   │   ├── manifest_enriched.jsonl     # + genre labels + BPM buckets
+│   │   ├── vocab.json                  # 427-token vocabulary
+│   │   ├── meta.json                   # Runtime audio analysis output
+│   │   └── processed/                  # train.jsonl, val.jsonl, test.jsonl
+│   │
+│   ├── checkpoints/
+│   │   ├── conditioned_transformer/    # Trained Transformer (best.pth, latest.pth)
+│   │   ├── guitar_macro_classifier.pth # Trained ResMelNet
+│   │   └── guitar_macro_classifier.onnx
+│   │
+│   └── samples/                        # Generated MIDI outputs
+│
+└── README.md
 ```
 
-This:
-- Loads the classifier (if available)
-- Computes the mel spectrogram
-- Predicts genre, estimates BPM, extracts chords
-- Saves the conditioning JSON
+---
 
-### Run MIDI → JSONL preprocessing
+## Models
 
-Run the manifest→JSONL script after setting the paths in `preprocess.yaml`.
+### ResMelNet — Audio Genre Classifier
+
+| Property | Value |
+|----------|-------|
+| Architecture | Residual CNN with SE blocks |
+| Input | Mel-spectrogram patches (256 bins) |
+| Output | Macro-genre class (33 audio categories) |
+| Checkpoint | `guitar_macro_classifier.pth` |
+| Export | ONNX (`guitar_macro_classifier.onnx`) |
+
+### Conditional Transformer LM — MIDI Generator
+
+| Property | Value |
+|----------|-------|
+| Architecture | Causal Transformer Encoder |
+| Parameters | **25.4M** |
+| `d_model` | 512 |
+| Layers | 8 |
+| Attention heads | 8 |
+| FFN dimension | 2,048 |
+| Max sequence length | 1,024 |
+| Vocabulary | **427 sub-tokens** |
+| Conditioning | Genre (11 classes) + BPM (15 buckets) |
+| Weight tying | Embedding ↔ LM head |
+| Activation | GELU |
+| Normalization | Pre-LayerNorm |
+
+---
+
+## Datasets
+
+### Audio Dataset
+
+- **Source:** Apple Loops (Logic Pro)
+- **Classes:** 33 guitar styles
+- **Preprocessing:** Mel-spectrograms (FFT=4096, hop=256, 256 bins, 20 Hz–Nyquist)
+- **Augmentation:** Random time/frequency masking
+
+### MIDI Dataset
+
+| Split | Samples |
+|-------|---------|
+| Train | 4,089 |
+| Val | 511 |
+| Test | 512 |
+| **Total** | **5,112** |
+
+- **Source:** 6,843 curated MIDI files, filtered to 4/4 time signature
+- **Genre distribution (train):** rock 1,680 · pop 935 · unknown 737 · country 163 · funk/disco 158 · jazz 110 · electronic 88 · latin 88 · blues 78 · reggae 42 · classical 10
+- **Quantization:** 1/16 grid, 4 steps/beat, 480 TPB
+- **Loop length:** 128 steps (8 bars)
+
+---
+
+## Training Results
+
+| Metric | Value |
+|--------|-------|
+| Training steps | 6,350 |
+| Epochs | 50 |
+| Train loss | **0.7265** |
+| Val loss | **0.9314** |
+| Test loss | **0.8589** |
+| Best val loss | 0.9261 |
+| Effective batch size | 32 (4 × 8 accum) |
+| Optimizer | AdamW (β₁=0.9, β₂=0.95, wd=0.1) |
+| Learning rate | 3×10⁻⁴ → 3×10⁻⁵ (cosine decay) |
+| Hardware | Apple M4 Pro, 24 GB unified memory |
+
+---
+
+## Quick Start
+
+### Prerequisites
+
+```bash
+pip install torch torchaudio librosa miditoolkit pyyaml numpy tqdm
+```
+
+### 1. Audio Analysis
+
+Extract genre, BPM, and chords from an input guitar recording:
+
+```bash
+python3 code/python/feature_extraction.py --audio Test.wav
+```
+
+Output saved to `data/json/meta.json`:
+
+```json
+{
+  "BPM": 83,
+  "GENRE": "blues_garage",
+  "CHORDS": [[0.725, "A"], [3.136, "D"], [6.261, "A"], ...]
+}
+```
+
+### 2. Generate MIDI Accompaniment
+
+Run the full inference pipeline — audio analysis → conditioning → generation:
+
+```bash
+python3 code/python/pipeline_generate.py \
+  --audio Test.wav \
+  --ckpt data/checkpoints/conditioned_transformer/best.pth \
+  --vocab data/json/vocab.json \
+  --out-dir data/samples/output \
+  --num-candidates 10 \
+  --temperature 0.4 \
+  --top-k 12 \
+  --max-new-tokens 2000
+```
+
+This generates 10 candidate MIDI files in `data/samples/output/`, automatically selects the best one, and validates each output for structural correctness.
+
+#### Generation parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `--temperature` | 0.6 | Sampling temperature (lower = more conservative) |
+| `--top-k` | 24 | Top-k filtering (lower = less random) |
+| `--num-candidates` | 5 | Number of candidates to generate |
+| `--max-new-tokens` | 420 | Maximum tokens to generate per candidate |
+| `--min-notes` | 16 | Minimum note count for validity |
+
+### 3. Retrain the Model
+
+To retrain from scratch on the conditioned dataset:
+
+```bash
+# Step 1: Enrich manifest with genre/BPM metadata
+python3 code/python/enrich_manifest.py
+
+# Step 2: Build sub-token training data
+python3 code/python/manifest_to_jsonl.py
+
+# Step 3: Split into train/val/test
+python3 code/python/split_dataset.py
+
+# Step 4: Build vocabulary
+python3 code/python/build_vocab.py
+
+# Step 5: Train
+python3 code/python/train_baseline.py \
+  --max-steps 8000 \
+  --epochs 50 \
+  --batch-size 4 \
+  --grad-accum 8 \
+  --d-model 512 \
+  --layers 8 \
+  --heads 8 \
+  --max-len 1024 \
+  --output-dir data/checkpoints/conditioned_transformer
+```
+
+### 4. Export to ONNX
+
+```bash
+python3 code/python/convert_transformer_onnx.py \
+  --ckpt data/checkpoints/conditioned_transformer/best.pth \
+  --out data/checkpoints/conditioned_transformer/best.onnx
+```
+
+---
+
+## Technical Notes
+
+### Hardware Requirements
+
+- **Training:** Apple Silicon Mac with ≥16 GB unified memory (tested on M4 Pro 24 GB)
+- **Inference:** Any machine with Python 3.10+ and PyTorch ≥2.0
+- **ONNX runtime:** CPU inference supported via exported `.onnx` model
+
+### Reproducibility
+
+All random seeds are fixed (`seed=42` for training, `seed=1337` for dataset splitting). The dataset split is performed at the song level (no data leakage between train/val/test).
+
+### Limitations and Future Work
+
+- **Genre coverage:** The MIDI dataset has uneven genre distribution (rock and pop dominate). Balanced sampling or class-weighted loss could improve minority-genre generation.
+- **Chord conditioning:** Chord information is extracted at inference time but not yet injected as conditioning tokens. Adding `<CHORD_Am>` tokens is a natural next step.
+- **Audio-MIDI alignment:** The current system does not perform temporal alignment between input audio and generated MIDI. The output is a stylistically coherent loop, not a synchronized accompaniment.
+- **Evaluation metrics:** Formal perceptual evaluation (e.g., listening tests, Fréchet Audio Distance on synthesized MIDI) remains as future work.
+
+---
+
+## References
+
+- Dhariwal, P. et al. *Jukebox: A Generative Model for Music.* arXiv:2005.00341, 2020.
+- Agostinelli, A. et al. *MusicLM: Generating Music from Text.* arXiv:2301.11325, 2023.
+- Copet, J. et al. *Simple and Controllable Music Generation.* (MusicGen) arXiv:2306.05284, 2023.
+- Huang, C.-Z. A. et al. *Music Transformer.* arXiv:1809.04281, 2018.
 
 ---
 
 ## Author & Supervision
 
-**Author:** Andrea Maggiore  
-**Thesis Supervisor:** Prof. Marco Raoul Marini  
-**Institution:** Sapienza University of Rome  
+**Author:** Andrea Maggiore — Mat. 1947898  
+**Supervisor:** Prof. Marco Raoul Marini  
+**Institution:** Sapienza Università di Roma  
 **Academic Year:** 2025/26
