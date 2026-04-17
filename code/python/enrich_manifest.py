@@ -15,20 +15,15 @@ import re
 INPUT_PATH  = "data/json/manifest.jsonl"
 OUTPUT_PATH = "data/json/manifest_enriched.jsonl"
 
-# ──────────────────────────────────────────────
-#  Macro-genre taxonomy (10 classes + unknown)
-# ──────────────────────────────────────────────
+
 GENRES = [
     "rock", "pop", "funk_disco", "jazz", "blues",
     "latin", "electronic", "classical", "country", "reggae",
     "unknown",
 ]
 
-# ──────────────────────────────────────────────
-#  Artist → genre mapping (lowercase key)
-# ──────────────────────────────────────────────
 ARTIST_GENRE: dict[str, str] = {
-    # ── Rock ──────────────────────────────────
+
     "ac dc": "rock", "acdc": "rock", "aerosmith": "rock",
     "alice cooper": "rock", "allman brothers": "rock",
     "arctic monkeys": "rock", "avril lavigne": "rock",
@@ -84,7 +79,6 @@ ARTIST_GENRE: dict[str, str] = {
     "billy idol": "rock",
     "collective soul": "rock", "david bowie": "rock",
     "edgar winter band": "rock",
-    # Additional rock
     "mike oldfield": "rock", "nightwish": "rock",
     "emerson lake & palmer": "rock", "emerson lake and palmer": "rock",
     "the corrs": "rock", "corrs": "rock",
@@ -127,8 +121,6 @@ ARTIST_GENRE: dict[str, str] = {
     "dion": "pop",
     "don mclean": "pop",
     "daryl braithwaite": "pop",
-
-    # ── Pop ───────────────────────────────────
     "abba": "pop", "ace of base": "pop",
     "a-ha": "pop", "aqua": "pop",
     "backstreet boys": "pop", "bee gees": "pop",
@@ -143,7 +135,6 @@ ARTIST_GENRE: dict[str, str] = {
     "elton john": "pop", "billy joel": "pop",
     "cliff richard": "pop", "clouseau": "pop",
     "duran duran": "pop", "sting": "pop",
-    # Additional pop
     "madonna": "pop", "michael jackson": "pop",
     "pet shop boys": "pop", "phil collins": "pop",
     "robbie williams": "pop", "spice girls": "pop",
@@ -174,8 +165,6 @@ ARTIST_GENRE: dict[str, str] = {
     "angel": "pop",
     "chingy": "pop",
     "danny elfman": "rock",
-
-    # ── Funk / Disco / R&B ────────────────────
     "average white band": "funk_disco",
     "boney m": "funk_disco", "chaka khan": "funk_disco",
     "chic": "funk_disco", "earth wind & fire": "funk_disco",
@@ -191,7 +180,6 @@ ARTIST_GENRE: dict[str, str] = {
     "bobby caldwell": "funk_disco",
     "corinne bailey rae": "funk_disco",
     "coolio": "pop",
-    # Additional funk/soul
     "stevie wonder": "funk_disco",
     "temptations": "funk_disco", "the temptations": "funk_disco",
     "the four tops": "funk_disco", "four tops": "funk_disco",
@@ -202,8 +190,6 @@ ARTIST_GENRE: dict[str, str] = {
     "dells": "funk_disco",
     "billy ocean": "pop",
     "bobby hachey": "pop",
-
-    # ── Jazz ──────────────────────────────────
     "antonio carlos jobim": "jazz", "brecker brothers": "jazz",
     "chick corea": "jazz", "dave brubeck": "jazz",
     "donald fagan": "jazz", "donald fagen": "jazz",
@@ -213,39 +199,28 @@ ARTIST_GENRE: dict[str, str] = {
     "thelonious monk": "jazz", "weather report": "jazz",
     "al jarreau": "jazz", "david sanborn": "jazz",
     "amy winehouse": "jazz",
-    # Additional jazz
     "john mclaughlin": "jazz",
     "david torkanowsky": "jazz",
-
-    # ── Blues ─────────────────────────────────
     "bb king": "blues", "buddy guy": "blues",
     "howlin wolf": "blues", "john lee hooker": "blues",
     "muddy waters": "blues", "robert johnson": "blues",
     "stevie ray vaughan": "blues",
     "blues brother": "blues", "blues brothers": "blues",
     "chuck berry": "rock",
-
-    # ── Latin ────────────────────────────────
     "chambao": "latin", "ricky martin": "latin",
     "shakira": "latin", "carlos santana": "latin",
     "marc anthony": "latin", "santana": "latin",
     "gloria estefan": "latin",
-
-    # ── Electronic ───────────────────────────
     "dj bobo": "electronic", "dj casper": "electronic",
     "dj sammy": "electronic", "bob sinclar": "electronic",
     "depeche mode": "electronic",
     "jean michel jarre": "electronic", "kraftwerk": "electronic",
-
-    # ── Classical ────────────────────────────
     "bach": "classical", "beethoven": "classical",
     "brahms": "classical", "mozart": "classical",
     "vivaldi": "classical", "chopin": "classical",
     "bethoven": "classical",
-    "charlie brown": "jazz",  # Vince Guaraldi jazz
-    "final fantasy": "classical",  # game soundtracks → orchestral
-
-    # ── Country ──────────────────────────────
+    "charlie brown": "jazz",
+    "final fantasy": "classical",
     "alan jackson": "country", "buck owens": "country",
     "charlie pride": "country", "clint black": "country",
     "conway twitty": "country", "dan seals": "country",
@@ -264,11 +239,7 @@ ARTIST_GENRE: dict[str, str] = {
     "david lee murphy": "country", "daryle singletary": "country",
     "david kersh": "country",
     "billy swan": "country",
-
-    # ── Reggae ───────────────────────────────
     "bob marley": "reggae",
-
-    # ── French chanson / Misc → pop ──────────
     "edith piaf": "pop", "charles aznavour": "pop",
     "ginette reno": "pop", "isabelle boulay": "pop",
     "gerry boulet": "rock",
@@ -277,26 +248,17 @@ ARTIST_GENRE: dict[str, str] = {
     "claude nougaro": "jazz",
     "boris vian": "jazz",
     "beau dommage": "rock",
-    "eminem": "pop",  # hip-hop → closest available bucket
+    "eminem": "pop",
     "busta rhymes": "pop", "bhusta rhymes": "pop",
-
-    # ── Folk / Celtic ────────────────────────
     "celtic": "country",
     "bluegrass": "country",
     "cajun": "country",
-
-    # ── Zemlja Obecana (Balkan pop-rock) ─────
     "zemlja obecana": "pop",
-
-    # ── Doe Maar (Dutch rock/ska) ────────────
     "doe maar": "rock",
 }
 
-# ──────────────────────────────────────────────
-#  Keyword-based fallback rules (applied to lowercased song_id)
-# ──────────────────────────────────────────────
+
 KEYWORD_RULES: list[tuple[list[str], str]] = [
-    # Genre keywords in filename
     (["blues"], "blues"),
     (["jazz", "bossa", "swing"], "jazz"),
     (["reggae", "ska"], "reggae"),
@@ -316,14 +278,11 @@ def normalize_artist(song_id: str) -> str:
     """Extract and normalize artist name from song_id."""
     s = song_id.strip()
 
-    # Try 'Artist - Song' pattern
     if " - " in s:
         s = s.split(" - ")[0].strip()
 
-    # Try common 'Artist_Song' patterns
     elif s.count("_") >= 2 and not s[0].isdigit():
         parts = s.split("_")
-        # Heuristic: take first 2-3 parts as artist
         s = " ".join(parts[:2])
 
     # Remove common suffixes
@@ -341,27 +300,22 @@ def classify_genre(song_id: str) -> str:
     artist = normalize_artist(song_id)
     sid_lower = song_id.lower()
 
-    # 1. Exact artist match
     if artist in ARTIST_GENRE:
         return ARTIST_GENRE[artist]
 
-    # 2. Prefix match (handles "acdc-...", "beatles-...", etc.)
     for known_artist, genre in ARTIST_GENRE.items():
         if artist.startswith(known_artist) or known_artist.startswith(artist):
             return genre
 
-    # 3. Substring match in full song_id
     for known_artist, genre in ARTIST_GENRE.items():
         if known_artist in sid_lower:
             return genre
 
-    # 4. Keyword-based fallback
     for keywords, genre in KEYWORD_RULES:
         for kw in keywords:
             if kw in sid_lower:
                 return genre
 
-    # 5. Check for national anthems
     if "_natant" in sid_lower or "natant" in sid_lower:
         return "classical"
 

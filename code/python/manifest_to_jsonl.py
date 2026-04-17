@@ -33,7 +33,7 @@ def safe_int(x, default=None):
 with open(YAML_PATH, "r", encoding="utf-8") as stream:
     temp = yaml.safe_load(stream)
 
-# Use enriched manifest if it exists, otherwise fall back to base manifest
+
 if os.path.isfile(ENRICHED_MANIFEST):
     JSON_MANIFEST = ENRICHED_MANIFEST
     print(f"[INFO] Using enriched manifest: {ENRICHED_MANIFEST}")
@@ -113,6 +113,54 @@ def roles_to_tokens(roles: dict) -> str:
         for ev in evs:
             tokens.extend(event_to_subtokens(role_name, ev))
     return " ".join(tokens)
+
+
+_MAJOR_PROFILE = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88]
+_MINOR_PROFILE = [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17]
+_NOTE_NAMES = ["C", "Cs", "D", "Ds", "E", "F", "Fs", "G", "Gs", "A", "As", "B"]
+
+
+def detect_key_from_events(bass_events: list, harmony_events: list) -> str:
+    """
+    Detect the musical key from bass + harmony MIDI events using
+    the Krumhansl-Schmuckler algorithm (pitch class correlation).
+
+    Returns a key label like 'C', 'Am', 'Fs', 'Dsm' (lowercase m = minor).
+    Falls back to 'C' if no pitched events are available.
+    """
+    pc_hist = [0.0] * 12
+    for ev in bass_events + harmony_events:
+        pc = int(ev["pitch"]) % 12
+        duration = max(1, int(ev["end_step"]) - int(ev["start_step"]))
+        pc_hist[pc] += duration
+
+    total = sum(pc_hist)
+    if total == 0:
+        return "C"
+
+    pc_hist = [x / total for x in pc_hist]
+
+    best_key = "C"
+    best_corr = -999.0
+
+    for shift in range(12):
+        major_rot = [_MAJOR_PROFILE[(i - shift) % 12] for i in range(12)]
+        minor_rot = [_MINOR_PROFILE[(i - shift) % 12] for i in range(12)]
+
+        for profile, suffix in [(major_rot, ""), (minor_rot, "m")]:
+            mean_p = sum(profile) / 12
+            mean_h = sum(pc_hist) / 12
+            num = sum((pc_hist[i] - mean_h) * (profile[i] - mean_p) for i in range(12))
+            den_h = sum((pc_hist[i] - mean_h) ** 2 for i in range(12)) ** 0.5
+            den_p = sum((profile[i] - mean_p) ** 2 for i in range(12)) ** 0.5
+            if den_h * den_p == 0:
+                continue
+            corr = num / (den_h * den_p)
+            if corr > best_corr:
+                best_corr = corr
+                best_key = _NOTE_NAMES[shift] + suffix
+
+    return best_key
 
 
 def clip_events_to_loop(evs: list, loop_steps: int) -> list:
@@ -344,19 +392,19 @@ with open(processed_jsonl_path, "a", encoding="utf-8", newline="\n") as f_ok, \
                 }, ensure_ascii=False) + "\n")
                 continue
 
-            # ── Build conditioned prompt ──────────────────
             genre     = line.get("genre", "unknown")
             bpm_bucket = line.get("bpm_bucket")
             if bpm_bucket is None:
-                # fallback: bucket the raw bpm
                 raw_bpm = float(line.get("bpm", 120))
                 if raw_bpm > 200:
                     raw_bpm /= 2.0
                 raw_bpm = max(60.0, min(200.0, raw_bpm))
                 bpm_bucket = int(round(raw_bpm / 10.0) * 10)
 
+            detected_key = detect_key_from_events(bass_out, harm_out)
+
             user_prompt = (
-                f"<GENRE_{genre}> <BPM_{int(bpm_bucket)}> <LEN_{int(loop_steps)}>\n"
+                f"<GENRE_{genre}> <BPM_{int(bpm_bucket)}> <KEY_{detected_key}> <LEN_{int(loop_steps)}>\n"
                 f"{INSTRUCTION}"
             )
 
@@ -374,6 +422,7 @@ with open(processed_jsonl_path, "a", encoding="utf-8", newline="\n") as f_ok, \
                     "bpm": line.get("bpm"),
                     "bpm_bucket": bpm_bucket,
                     "genre": genre,
+                    "key": detected_key,
                     "tpb": TARGET_TPB,
                     "grid": QUANT_GRID,
                     "step_ticks": STEP_TICKS,

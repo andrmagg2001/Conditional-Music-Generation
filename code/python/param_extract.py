@@ -12,6 +12,6 @@ for name, param in state_dict.items():
     if isinstance(param, torch.Tensor):
         total_params += param.numel()
 
-print(f"--- Riepilogo Modello ---")
-print(f"Parametri totali: {total_params:,}")
-print(f"Dimensione stimata su disco: {total_params * 4 / (1024**2):.2f} MB (se float32)")
+print(f"--- Model Summary ---")
+print(f"Total parameters: {total_params:,}")
+print(f"Estimated disk size: {total_params * 4 / (1024**2):.2f} MB (if float32)")

@@ -12,10 +12,7 @@ from feature_extraction import classify_audio_file
 from train_baseline import BaselineTransformerLM
 
 
-# Legacy regex for old monolithic token format (kept for reference)
 EVENT_RE = re.compile(r"^([DBH]):s=(\d+),e=(\d+),p=(\d+),v=(\d+)$")
-
-# Sub-token prefixes used by the new tokenization scheme
 _SUBTOKEN_PREFIXES = ("<R_", "<S_", "<E_", "<P_", "<V_")
 
 
@@ -96,7 +93,6 @@ def _extract_event_tokens(generated_ids: list[int], id_to_token: dict[int, str])
             end_idx = i
             break
 
-    # Keep only sub-tokens (filter out any non-event tokens)
     return [t for t in tokens[loop_start:end_idx] if t.startswith(_SUBTOKEN_PREFIXES)]
 
 
@@ -252,6 +248,7 @@ def _bucket_bpm(bpm: float) -> int:
 def build_prompt(
     genre: str,
     bpm: float,
+    key_label: str,
     token_to_id: dict[str, int],
     len_token: str = "<LEN_128>",
     strict: bool = True,
@@ -260,7 +257,7 @@ def build_prompt(
     Build a conditioned prompt token sequence matching the training format.
 
     The output token order is:
-        <GENRE_X> <BPM_Y> <LEN_Z> Generate one loop. Output only tokens. <LOOP>
+        <GENRE_X> <BPM_Y> <KEY_Z> <LEN_N> Generate one loop. Output only tokens. <LOOP>
 
     Parameters
     ----------
@@ -268,6 +265,8 @@ def build_prompt(
         Genre label (e.g. "rock", "jazz", "unknown").
     bpm : float
         Raw BPM value — will be bucketed to nearest 10.
+    key_label : str
+        Musical key label (e.g. "Am", "C", "Fs"). Falls back to "C".
     token_to_id : dict
         Vocabulary mapping.
     len_token : str
@@ -284,13 +283,11 @@ def build_prompt(
     if not isinstance(token_to_id, dict) or len(token_to_id) == 0:
         raise ValueError("token_to_id empty or not valid")
 
-    # ── Validate critical tokens ────────────────
     critical = ["<LOOP>", "</LOOP>", "<BOS>", "<EOS>", "<UNK>", "<PAD>"]
     missing_critical = [t for t in critical if t not in token_to_id]
     if missing_critical:
         raise KeyError(f"Critical token not in vocab: {missing_critical}")
 
-    # ── Genre token ─────────────────────────────
     genre_token = f"<GENRE_{genre}>"
     if genre_token not in token_to_id:
         warnings.append(f"Genre token {genre_token} not in vocab, falling back to <GENRE_unknown>")
@@ -298,7 +295,6 @@ def build_prompt(
         if genre_token not in token_to_id and strict:
             raise KeyError("No <GENRE_unknown> token in vocab")
 
-    # ── BPM token ───────────────────────────────
     bpm_bucket = _bucket_bpm(bpm)
     bpm_token = f"<BPM_{bpm_bucket}>"
     if bpm_token not in token_to_id:
@@ -312,7 +308,14 @@ def build_prompt(
         elif strict:
             raise KeyError("No <BPM_*> token in vocab")
 
-    # ── LEN token ───────────────────────────────
+    key_token = f"<KEY_{key_label}>"
+    if key_token not in token_to_id:
+        warnings.append(f"Key token {key_token} not in vocab, falling back to <KEY_C>")
+        key_token = "<KEY_C>"
+        if key_token not in token_to_id:
+            warnings.append("No <KEY_C> token in vocab, skipping key conditioning")
+            key_token = None
+
     if not len_token or len_token not in token_to_id:
         if "<LEN_128>" in token_to_id:
             warnings.append(f"len_token not valid: using <LEN_128> over {len_token}")
@@ -328,7 +331,6 @@ def build_prompt(
                 warnings.append("No LEN token available: continuing without it")
                 len_token = None
 
-    # ── Instruction tokens ──────────────────────
     tok_generate = _pick_existing_token(["Generate", "generate"], token_to_id)
     tok_one = _pick_existing_token(["one", "One"], token_to_id)
     tok_loop = _pick_existing_token(["loop.", "loop"], token_to_id)
@@ -343,14 +345,15 @@ def build_prompt(
         warnings.append("Missing instruction tokens: using minimum fallback")
         instruction_parts = [x for x in instruction_parts if x is not None]
 
-    # ── Assemble prompt: <GENRE> <BPM> <LEN> instruction <LOOP> ──
     prompt_tokens = [genre_token, bpm_token]
+    if key_token is not None:
+        prompt_tokens.append(key_token)
     if len_token is not None:
         prompt_tokens.append(len_token)
     prompt_tokens.extend(instruction_parts)
     prompt_tokens.append("<LOOP>")
 
-    warnings.append(f"conditioning: genre={genre}, bpm_bucket={bpm_bucket}")
+    warnings.append(f"conditioning: genre={genre}, bpm_bucket={bpm_bucket}, key={key_label}")
 
     out_of_vocab = [t for t in prompt_tokens if t not in token_to_id]
     if out_of_vocab:
@@ -397,7 +400,6 @@ def generate_tokens(
             attention_mask = torch.ones_like(input_ids, dtype=torch.long, device=device)
 
             logits = model(input_ids, attention_mask)[:, -1, :].squeeze(0)
-            # Do not allow early stop tokens until we have generated enough tokens.
             if step_i + 1 < min_new_tokens:
                 logits = logits.clone()
                 logits[eos_id] = float("-inf")
@@ -448,9 +450,8 @@ def tokens_to_midi(event_tokens: list[str], out_path: pathlib.Path,
         p_tok = event_tokens[i + 3]
         v_tok = event_tokens[i + 4]
 
-        # Validate sub-token sequence starts with <R_>
         if not r_tok.startswith("<R_"):
-            i += 1  # skip and try to resync
+            i += 1
             continue
 
         role = r_tok[3:-1]  # "D", "B", or "H"
@@ -463,7 +464,7 @@ def tokens_to_midi(event_tokens: list[str], out_path: pathlib.Path,
         p_i = _parse_subtoken_value(p_tok)
         v_i = _parse_subtoken_value(v_tok)
 
-        i += 5  # advance to next group
+        i += 5
 
         if any(x is None for x in (s_i, e_i, p_i, v_i)):
             continue
@@ -575,9 +576,18 @@ def main():
     bpm_value = float(meta["bpm"]) if meta["bpm"] is not None else float(args.bpm)
     bpm_value = prompt_bpm_confirmation(bpm_value)
 
-    prompt_tokens, prompt_warnings = build_prompt(style_label, bpm_value, tok2id, args.len_token, strict=True)
-    prompt_warnings.append(f"meta_chords_count={len(meta['chords'])}")
+    chords_list = meta.get("chords", [])
+    if chords_list:
+        from collections import Counter
+        chord_counts = Counter(c[1] for c in chords_list if len(c) >= 2)
+        key_label = chord_counts.most_common(1)[0][0] if chord_counts else "C"
+    else:
+        key_label = "C"
 
+    prompt_tokens, prompt_warnings = build_prompt(
+        style_label, bpm_value, key_label, tok2id, args.len_token, strict=True
+    )
+    prompt_warnings.append(f"meta_chords_count={len(chords_list)}")
     bos_id = tok2id["<BOS>"]
     eos_id = tok2id["<EOS>"]
     loop_end_id = tok2id["</LOOP>"]
