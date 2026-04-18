@@ -1,0 +1,10 @@
+{
+  "total": 6843,
+  "ok": 5112,
+  "errors": 0,
+  "discarded": 1731,
+  "reasons": {
+    "not_4_4": 1557,
+    "empty_after_clipping": 174
+  }
+}

@@ -337,10 +337,18 @@ def load_checkpoint(
     device: torch.device,
     amp_enabled: bool,
 ) -> tuple[int, int, float]:
-    payload = torch.load(path, map_location=device)
+    payload = torch.load(path, map_location=device, weights_only=False)
     model.load_state_dict(payload["model"])
-    optimizer.load_state_dict(payload["optimizer"])
-    scheduler.load_state_dict(payload["scheduler"])
+
+    if "optimizer" in payload:
+        optimizer.load_state_dict(payload["optimizer"])
+    else:
+        print("[RESUME] No optimizer state found, starting fresh optimizer")
+
+    if "scheduler" in payload:
+        scheduler.load_state_dict(payload["scheduler"])
+    else:
+        print("[RESUME] No scheduler state found, starting fresh scheduler")
 
     scaler_state = payload.get("scaler")
     if amp_enabled and scaler_state:
