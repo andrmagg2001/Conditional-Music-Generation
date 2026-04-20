@@ -1,10 +1,11 @@
 {
-  "total": 6843,
-  "ok": 5112,
-  "errors": 0,
-  "discarded": 1731,
+  "total": 111481,
+  "ok": 87675,
+  "errors": 1,
+  "discarded": 23805,
   "reasons": {
-    "not_4_4": 1557,
-    "empty_after_clipping": 174
+    "not_4_4": 20385,
+    "empty_after_clipping": 3420,
+    "exception": 1
   }
 }

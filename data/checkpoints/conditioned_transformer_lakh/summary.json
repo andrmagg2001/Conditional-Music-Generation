@@ -1,0 +1,10 @@
+{
+  "final_step": 15000,
+  "final_epoch": 7,
+  "num_train_points": 15000,
+  "num_val_points": 30,
+  "last_train_loss": 0.4610704034566879,
+  "last_val_loss": 0.47216979290048283,
+  "best_val_loss": 0.47059781725207966,
+  "test_loss": 0.4806187491243084
+}

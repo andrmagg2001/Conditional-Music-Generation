@@ -8,7 +8,7 @@ import json as js
 INSTRUCTION     = "Generate one loop. Output only tokens."
 YAML_PATH       = "code/python/preprocess.yaml"
 JSON_MANIFEST   = ""
-ENRICHED_MANIFEST = "data/json/manifest_enriched.jsonl"
+ENRICHED_MANIFEST = "data/json/manifest_combined.jsonl"
 JSON_OUTPUT_DIR = ""
 JSON_LOG_DIR    = ""
 QUANT_GRID      = ""

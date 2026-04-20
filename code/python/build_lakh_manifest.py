@@ -84,13 +84,13 @@ def main():
         if res is not None:
             valid_songs.append(res)
             
-    print(f"\nAnalisi completata! File MIDI validi trovati: {len(valid_songs)}")
+    print(f"\nAnalysis completed! Valid MIDI files found: {len(valid_songs)}")
     
     with open(OUTPUT_MANIFEST, "w", encoding="utf-8") as f:
         for song in valid_songs:
             f.write(json.dumps(song) + "\n")
             
-    print(f"Manifest Lakh salvato in: {OUTPUT_MANIFEST}")
+    print(f"Manifest Lakh saved in: {OUTPUT_MANIFEST}")
 
 if __name__ == "__main__":
     main()
