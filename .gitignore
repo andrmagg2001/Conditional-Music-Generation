@@ -12,5 +12,4 @@ data/dataset/audio/
 note.md
 *__pycache__*
 *.tar.*
-*.txt
 *.mid*
