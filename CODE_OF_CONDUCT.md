@@ -22,7 +22,7 @@ Examples of unacceptable behavior:
 - Unwelcome sexual attention
 ## Enforcement
  
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported by contacting the project maintainer at **andrmagg2001@gmail.com**.
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported by contacting the project maintainer at **andrea.maggiore12@icloud.com**.
  
 All complaints will be reviewed and investigated.
  

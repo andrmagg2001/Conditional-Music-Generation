@@ -1,10 +1,10 @@
 # Contributing to Conditional Music Generation
 
-Grazie per l'interesse a contribuire! 🎵
+Thank you for your interest in contributing!
 
-## Come Iniziare
+## Getting Started
 
-### Fork e Clone
+### Fork and Clone
 
 ```bash
 git clone https://github.com/andrmagg2001/Conditional-Music-Generation.git
@@ -12,44 +12,44 @@ cd Conditional-Music-Generation
 git checkout -b feature/your-feature-name
 ```
 
-### Installa le Dipendenze
+### Install Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## Prima di Aprire una Pull Request
+## Before Opening a Pull Request
 
-1. **Test**: Verifica che il codice funziona localmente
-2. **Commit**: Usa messaggi chiari (`git commit -m "Add feature X"`)
+1. **Test**: Make sure the code works locally
+2. **Commit**: Use clear messages (`git commit -m "Add feature X"`)
 3. **Push**: `git push origin feature/your-feature-name`
 
-## Tipo di Contributi Benvenuti
+## Types of Contributions Welcome
 
-- **Bug fixes**: Correggi errori nel codice
-- **Miglioramenti**: Ottimizza performance o leggibilità
-- **Documentazione**: Aggiungi o migliora spiegazioni
-- **Esperimenti**: Prova nuove architetture o dataset
+- **Bug fixes**: Correct errors in the code
+- **Improvements**: Optimize performance or readability
+- **Documentation**: Add or improve explanations
+- **Experiments**: Try new architectures or datasets
 
-## Linee Guida sul Codice
+## Code Guidelines
 
-- Usa **Python 3.10+**
-- Segui il codice esistente come stile di riferimento
-- Aggiungi commenti chiari su sezioni complesse
-- Testa il codice prima di fare push
+- Use **Python 3.10+**
+- Follow the existing code as a style reference
+- Add clear comments on complex sections
+- Test the code before pushing
 
-## Segnalare Bug
+## Reporting Bugs
 
-Se trovi un bug, apri un **Issue** con:
+If you find a bug, open an **Issue** with:
 
-- Una descrizione chiara del problema
-- Passaggi per riprodurlo
-- Output di errore (se presente)
+- A clear description of the problem
+- Steps to reproduce it
+- Error output (if any)
 
-## Domande?
+## Questions?
 
-Contatta il maintainer: **andrmagg2001@gmail.com**
+Contact the maintainer: **andrea.maggiore12@icloud.com**
 
 ---
 
-Grazie per il contributo! 🚀
+Thank you for contributing!
