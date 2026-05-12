@@ -1,0 +1,16 @@
+TODO.md
+*.wav
+*.mid
+*.npy
+*.pth
+*.onnx
+*.json*
+data/json/processed/cache_tokenized/
+data/dataset/audio/
+.DS*
+.vscode
+note.md
+*__pycache__*
+*.tar.*
+*.txt
+*.mid*
